@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:                                             # Defines the services that will be run.
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.0
+    container_name: keycloak
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    ports:
+      - "8080:8080"
+    command: start-dev                                 # Starts the Keycloak server in development mode.
+    networks:                                          # Connects the keycloak service to the app-network.
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  app:                                              # Defines the app service.
+    build: .                                        # Builds from the current directory (.) where the Dockerfile is present.
+    container_name: fastapi-app
+    environment:
+      - KEYCLOAK_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=myrealm
+      - KEYCLOAK_CLIENT_ID=myclient
+      - KEYCLOAK_CLIENT_SECRET=
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - FASTAPI_HOST=0.0.0.0
+    ports:
+      - "8000:8000"
+    depends_on:                                     # Waits for the keycloak service to be healthy before starting the app service.
+      keycloak:
+        condition: service_healthy
+    networks:                                       # Connects the app service to the app-network.
+      - app-network
+    volumes:                                         # Mounts the current directory (.) to the /app directory in the container.
+      - .:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+networks:                                             # Creates a network called app-network.
+  app-network:
+    driver: bridge                                    # Uses the bridge driver for the network.
